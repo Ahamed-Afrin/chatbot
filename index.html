@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Document Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-b from-blue-50 to-gray-100 min-h-screen">
+    <div class="flex justify-end gap-3 p-4" id="authButtons">
+        <a href="login.html" class="px-4 py-2 rounded-lg bg-white text-blue-600 border border-blue-600 hover:bg-blue-50 transition">Login</a>
+        <a href="signup.html" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">Sign Up</a>
+    </div>
+
+    <!-- Signup link will be replaced by signup.html content -->
+    <div class="flex justify-end gap-3 p-4 items-center hidden" id="userInfo">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <span id="username" class="py-2 font-medium text-gray-700"></span>
+        <button id="logoutBtn" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition">Logout</button>
+    </div>
+    <!-- Login link will be replaced by login.html content -->
+
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <h1 class="text-4xl font-bold text-center mb-8 pt-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
+            <span class="inline-block">📄 AI Document Assistant</span>
+        </h1>
+
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-6 text-blue-700">1️⃣ Upload Your Document</h2>
+            <form id="uploadForm" class="flex flex-col sm:flex-row items-center gap-4">
+                <label class="w-full sm:w-auto">
+                    <span class="sr-only">Choose file</span>
+                    <input type="file" name="file" id="fileInput" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                </label>
+                <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-all duration-200 transform hover:scale-105">
+                    Process Document 🚀
+                </button>
+            </form>
+            <div id="uploadStatus" class="mt-2 text-green-600"></div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold mb-6 text-blue-700">2️⃣ Ask Questions</h2>
+            <textarea id="queryInput" class="w-full border-2 border-gray-200 rounded-lg p-4 mb-6 focus:ring-2 focus:ring-blue-500 focus:border-transparent" rows="4" placeholder="Ask anything about your document..." required></textarea>
+            <button id="queryButton" class="px-8 py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold rounded-full shadow-lg transition-all duration-200 transform hover:scale-105">
+                Get Answer ✨
+                <span id="loadingSpinner" class="hidden ml-2 inline-block animate-spin">↻</span>
+            </button>
+            <div id="responseContainer" class="mt-6 transition-opacity duration-300 ease-in-out opacity-0 h-0 overflow-hidden" style="display: none;">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">🔍 Answer:</h3>
+                <div id="answer" class="bg-white p-6 rounded-xl shadow-sm mb-6 border-l-4 border-blue-500 prose max-w-none"></div>
+                <h3 class="text-xl font-bold mb-4 text-gray-800">📚 Sources:</h3>
+                <div id="sources" class="grid grid-cols-1 gap-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Database connection
+        const db = {
+            users: [],
+            documents: [],
+            sessions: [],
+
+            addUser: function(user) {
+                this.users.push(user);
+                return user;
+            },
+
+            addDocument: function(doc) {
+                this.documents.push(doc);
+                return doc;
+            },
+
+            createSession: function(userId) {
+                const session = { userId, token: Math.random().toString(36).substring(2) };
+                this.sessions.push(session);
+                return session;
+            }
+        };
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            if (!currentUser) {
+                alert('Please login to upload files');
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files[0]) {
+                document.getElementById('uploadStatus').textContent = 'No file selected';
+                document.getElementById('uploadStatus').className = 'mt-2 text-red-600';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const fileName = fileInput.files[0].name;
+                const doc = db.addDocument({
+                    id: Date.now().toString(),
+                    filename: fileName,
+                    userId: currentUser?.id,
+                    uploadDate: new Date().toISOString(),
+                    content: await fileInput.files[0].text()
+                });
+
+                const data = {
+                    message: 'File uploaded successfully',
+                    documentId: doc.id
+                };
+                    document.getElementById('uploadStatus').textContent = data.message;
+                    const container = document.getElementById('responseContainer');
+                    container.style.display = 'block';
+                    setTimeout(() => {
+                        container.classList.remove('opacity-0', 'h-0');
+                    }, 10);
+                } else {
+                    document.getElementById('uploadStatus').textContent = 'Error: ' + data.error;
+                    document.getElementById('uploadStatus').className = 'mt-2 text-red-600';
+                }
+            } catch (error) {
+                document.getElementById('uploadStatus').textContent = 'Error uploading file';
+                document.getElementById('uploadStatus').className = 'mt-2 text-red-600';
+            }
+        });
+
+        let currentUser = null;
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        document.getElementById('queryButton').addEventListener('click', async () => {
+            const query = document.getElementById('queryInput').value.trim();
+            if (!query) return;
+
+            try {
+                // Disable button during processing
+                const queryButton = document.getElementById('queryButton');
+                queryButton.disabled = true;
+                document.getElementById('loadingSpinner').classList.remove('hidden');
+
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query })
+                });
+                const data = await response.json();
+
+                if (response.status === 200) {
+                    document.getElementById('answer').textContent = data.answer;
+
+                    const sourcesDiv = document.getElementById('sources');
+                    sourcesDiv.innerHTML = '';
+
+                    if (data.sources && data.sources.length > 0) {
+                        data.sources.forEach((source, index) => {
+                            const sourceDiv = document.createElement('div');
+                            sourceDiv.className = 'bg-gray-50 p-3 rounded border';
+                            sourceDiv.textContent = `Page ${source.page + 1}`;
+                            sourcesDiv.appendChild(sourceDiv);
+                        });
+                    } else {
+                        sourcesDiv.textContent = 'No sources available';
+                    }
+                } else {
+                    document.getElementById('answer').textContent = 'Error: ' + data.error;
+                }
+            } catch (error) {
+                document.getElementById('answer').textContent = 'Error processing your question: ' + error.message;
+            } finally {
+                // Restore button state
+                const queryButton = document.getElementById('queryButton');
+                queryButton.disabled = false;
+                document.getElementById('loadingSpinner').classList.add('hidden');
+            }
+        });
+=======
+                =======
+        });
+=======
+                =======
+        });
+=======
+        });
+=======
+=======
+        });
+=======
+=======
+            =======
+        });
+=======
+                } finally {
+                    // Restore button state
+                    const queryButton = document.getElementById('queryButton');
+                    queryButton.disabled = false;
+                    document.getElementById('loadingSpinner').classList.add('hidden');
+                }
+            });
+        });
+=======
+=======
+        });
+
+        // Auth functionality
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            document.getElementById('loginModal').classList.remove('hidden');
+        });
+
+        document.getElementById('signupBtn').addEventListener('click', () => {
+            document.getElementById('signupModal').classList.remove('hidden');
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const user = db.users.find(u => u.email === email && u.password === password);
+                if (user) {
+                    const session = db.createSession(user.id);
+                    const data = {
+                        id: user.id,
+                        name: user.name,
+                        email: user.email,
+                        token: session.token
+                    };
+                    document.getElementById('loginModal').classList.add('hidden');
+                    document.getElementById('authButtons').classList.add('hidden');
+                    document.getElementById('userInfo').classList.remove('hidden');
+                    document.getElementById('username').textContent = data.username;
+                } else {
+                    alert('Login failed: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error during login');
+            }
+        });
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+
+            try {
+                const existingUser = db.users.find(u => u.email === email);
+                if (existingUser) {
+                    alert('User already exists');
+                } else {
+                    const user = db.addUser({
+                        id: Date.now().toString(),
+                        name,
+                        email,
+                        password
+                    });
+                    alert('Signup successful! Please login.');
+                    document.getElementById('signupModal').classList.add('hidden');
+                    alert('Signup successful! Please login.');
+                } else {
+                    alert('Signup failed: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error during signup');
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await fetch('/logout', { method: 'POST' });
+                document.getElementById('authButtons').classList.remove('hidden');
+                document.getElementById('userInfo').classList.add('hidden');
+            } catch (error) {
+                alert('Error during logout');
+            }
+        });
+    </script>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-4">Login</h2>
+            <form id="loginForm">
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Email</label>
+                    <input type="email" id="loginEmail" class="w-full p-2 border rounded" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-700 mb-2">Password</label>
+                    <input type="password" id="loginPassword" class="w-full p-2 border rounded" required>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="document.getElementById('loginModal').classList.add('hidden')"
+                            class="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div id="signupModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-4">Sign Up</h2>
+            <form id="signupForm">
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Name</label>
+                    <input type="text" id="signupName" class="w-full p-2 border rounded" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Email</label>
+                    <input type="email" id="signupEmail" class="w-full p-2 border rounded" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-700 mb-2">Password</label>
+                    <input type="password" id="signupPassword" class="w-full p-2 border rounded" required>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="document.getElementById('signupModal').classList.add('hidden')"
+                            class="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Sign Up</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>
+
